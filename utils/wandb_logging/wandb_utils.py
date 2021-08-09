@@ -92,10 +92,11 @@ class WandbLogger():
                 self.wandb_run = wandb.init(id=run_id, project=project, resume='allow')
                 opt.resume = model_artifact_name
         elif self.wandb:
+            project_n = opt.task
             self.wandb_run = wandb.init(config=opt,
                                         resume="allow",
                                         entity ="ksa_flyer",
-                                        project='cropping' if opt.project == 'runs/train' else Path(opt.project).stem,
+                                        project=project_n if opt.project == 'runs/train' else Path(opt.project).stem,
                                         name=name,
                                         job_type=job_type,
                                         id=run_id) if not wandb.run else wandb.run
