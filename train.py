@@ -39,15 +39,23 @@ logger = logging.getLogger(__name__)
 
 
 def train(hyp, opt, device, tb_writer=None):
+    logger.info('')
     logger.info(colorstr('hyperparameters: ') + ', '.join(f'{k}={v}' for k, v in hyp.items()))
-    save_dir, epochs, batch_size, total_batch_size, weights, rank = \
-        Path(opt.save_dir), opt.epochs, opt.batch_size, opt.total_batch_size, opt.weights, opt.global_rank
+    save_dir, epochs, batch_size, total_batch_size, weights, rank, task_name = \
+        Path(opt.save_dir), opt.epochs, opt.batch_size, opt.total_batch_size, opt.weights, opt.global_rank, opt.task
 
     # Directories
+    from datetime import datetime
+    dt =  datetime.now()
+    dt_str = dt.strftime('%d%b%y-%H%M%S')
+
+    model_name = weights.split('.')[0]
+    # cropping_yolov5l_29May21-035456_exp2
+    full_model_name = f'{task_name}_{model_name}_{dt_str}'
     wdir = save_dir / 'weights'
     wdir.mkdir(parents=True, exist_ok=True)  # make dir
-    last = wdir / 'last.pt'
-    best = wdir / 'best.pt'
+    last = f'{wdir}/{full_model_name}_last.pt'
+    best = f'{wdir}/{full_model_name}_best.pt'
     results_file = save_dir / 'results.txt'
 
     # Save run settings
@@ -487,6 +495,7 @@ if __name__ == '__main__':
     parser.add_argument('--bbox_interval', type=int, default=-1, help='Set bounding-box image logging interval for W&B')
     parser.add_argument('--save_period', type=int, default=-1, help='Log model after every "save_period" epoch')
     parser.add_argument('--artifact_alias', type=str, default="latest", help='version of dataset artifact to be used')
+    parser.add_argument('--task',type=str,help='task name like cropping, price box extraction etc')
     opt = parser.parse_args()
 
     # Set DDP variables
@@ -514,7 +523,13 @@ if __name__ == '__main__':
         assert len(opt.cfg) or len(opt.weights), 'either --cfg or --weights must be specified'
         opt.img_size.extend([opt.img_size[-1]] * (2 - len(opt.img_size)))  # extend to 2 sizes (train, test)
         opt.name = 'evolve' if opt.evolve else opt.name
-        opt.save_dir = str(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok | opt.evolve))
+        #todo save directory on google drive
+        if opt.task:
+            # opt.save_dir = f'runs/{opt.task}/train'
+            # opt.name = f'{opt.task}'
+            opt.save_dir = str(increment_path(Path(opt.project) / opt.task / opt.name, exist_ok=opt.exist_ok | opt.evolve))
+        else:
+            opt.save_dir = str(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok | opt.evolve))
 
     # DDP mode
     opt.total_batch_size = opt.batch_size

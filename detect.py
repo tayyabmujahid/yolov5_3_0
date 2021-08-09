@@ -173,6 +173,7 @@ if __name__ == '__main__':
     parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
     opt = parser.parse_args()
     print(opt)
+
     check_requirements(exclude=('tensorboard', 'pycocotools', 'thop'))
 
     with torch.no_grad():
