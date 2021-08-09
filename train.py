@@ -54,8 +54,8 @@ def train(hyp, opt, device, tb_writer=None):
     full_model_name = f'{task_name}_{model_name}_{dt_str}'
     wdir = save_dir / 'weights'
     wdir.mkdir(parents=True, exist_ok=True)  # make dir
-    last = f'{wdir}/{full_model_name}_last.pt'
-    best = f'{wdir}/{full_model_name}_best.pt'
+    last = wdir/f'{full_model_name}_last.pt'
+    best = wdir/f'{full_model_name}_best.pt'
     results_file = save_dir / 'results.txt'
 
     # Save run settings
