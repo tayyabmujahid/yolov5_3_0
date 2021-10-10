@@ -670,10 +670,10 @@ def save_one_box(xyxy, im, file='image.jpg', gain=1.02, pad=10, square=False, BG
     cv2.imwrite(str(increment_path(file, mkdir=True).with_suffix('.jpg')), crop if BGR else crop[..., ::-1])
 
 
-def increment_path(path, exist_ok=False, sep='', mkdir=False):
+def increment_path(path, exist_ok=False, sep='', mkdir=False, use_date=True):
     # Increment file or directory path, i.e. runs/exp --> runs/exp{sep}2, runs/exp{sep}3, ... etc.
     path = Path(path)  # os-agnostic
-    if path.exists() and not exist_ok:
+    if path.exists() and not exist_ok and not use_date:
         suffix = path.suffix
         path = path.with_suffix('')
         dirs = glob.glob(f"{path}{sep}*")  # similar paths
@@ -685,3 +685,20 @@ def increment_path(path, exist_ok=False, sep='', mkdir=False):
     if not dir.exists() and mkdir:
         dir.mkdir(parents=True, exist_ok=True)  # make directory
     return path
+
+
+def create_experiment_path(project, task_name, weights):
+    """
+    :param task_name: 'product_crop' or 'preocr_crop' etc
+    :param weights:name of the weights/architecture like yolov5s,yolov5l etc
+    :return:
+    """
+    from datetime import datetime
+    dt = datetime.now()
+    dt_str = dt.strftime('%d%b%y_%H%M%S')
+
+    model_name = weights.split('.')[0]
+    # cropping_yolov5l_29May21_035456_exp2
+    full_model_name = f'{task_name}_{model_name}_{dt_str}'
+    path = Path(f'{project}/{task_name}/{dt_str}')
+    return dt_str, full_model_name, path

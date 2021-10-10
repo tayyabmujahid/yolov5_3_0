@@ -198,6 +198,40 @@ class LoadImages:  # for inference
     def __len__(self):
         return self.nf  # number of files
 
+class LoadPagesFromPaths:
+    def __init__(self, images_paths_list, img_size=640):
+        pages = images_paths_list
+
+        # images = [x for x in pages if x.split('.')[-1].lower() in img_formats]
+
+        images = pages
+        self.ni = len(images)
+        self.img_size = img_size
+        self.files = pages
+
+    def __iter__(self):
+        self.count = 0
+        return self
+
+    def __next__(self):
+        if self.count == self.ni:
+            raise StopIteration
+
+        path = self.files[self.count]
+        self.count += 1
+        img0 = cv2.imread(path) #BGR
+        assert img0 is not None,'Image Not Found ' + path
+        #Padded resize
+        img = letterbox(img0,new_shape=self.img_size)[0]
+
+        #convert
+        img = img[:,:,::-1].transpose(2,0,1) #BGR to RGB to 3x416x416
+        img = np.ascontiguousarray(img)
+
+        return path, img, img0, None
+
+    def __len__(self):
+        return self.ni
 
 class LoadWebcam:  # for inference
     def __init__(self, pipe='0', img_size=640, stride=32):

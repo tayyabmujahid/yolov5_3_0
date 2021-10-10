@@ -1,4 +1,5 @@
 import argparse
+import shutil
 import time
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from utils.torch_utils import select_device, load_classifier, time_synchronized
 
 
 def detect(opt):
-    source, weights, view_img, save_txt, imgsz = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size
+    source, weights, view_img, save_txt, archive, imgsz = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.archive, opt.img_size
     save_img = not opt.nosave and not source.endswith('.txt')  # save inference images
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
         ('rtsp://', 'rtmp://', 'http://', 'https://'))
@@ -24,6 +25,8 @@ def detect(opt):
     save_dir = increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok)  # increment run
     (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
 
+
+
     # Initialize
     set_logging()
     device = select_device(opt.device)
@@ -31,9 +34,26 @@ def detect(opt):
 
     # Load model
     model = attempt_load(weights, map_location=device)  # load FP32 model
+    print('len models : ',type(model))
     stride = int(model.stride.max())  # model stride
     imgsz = check_img_size(imgsz, s=stride)  # check img_size
     names = model.module.names if hasattr(model, 'module') else model.names  # get class names
+    print(names)
+    if archive:
+        import os
+        os.mkdir(str(save_dir / 'archive'))
+        os.mkdir(str(save_dir / 'archive' / 'images'))
+        os.mkdir(str(save_dir / 'archive' / 'obj_train_data'))
+        archive_obj_data = str(save_dir / 'archive' / 'obj.data')
+        archive_obj_names = str(save_dir / 'archive' / 'obj.names')
+
+        with open(archive_obj_data,'w') as fod:
+            obj_data = f'classes = {len(names)}\ntrain = data/train.txt\n' \
+                       f'names = data/obj.names\n' \
+                       f'backup = backup/'
+            fod.write(obj_data)
+        with open(archive_obj_names, 'w') as fon:
+            fon.writelines([i+'\n' for i in names])
     if half:
         model.half()  # to FP16
 
@@ -71,6 +91,8 @@ def detect(opt):
         pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, opt.classes, opt.agnostic_nms,
                                    max_det=opt.max_det)
         t2 = time_synchronized()
+        print(type(pred))
+        print(pred)
 
         # Apply Classifier
         if classify:
@@ -78,6 +100,7 @@ def detect(opt):
 
         # Process detections
         for i, det in enumerate(pred):  # detections per image
+            print('-----', i)
             if webcam:  # batch_size >= 1
                 p, s, im0, frame = path[i], f'{i}: ', im0s[i].copy(), dataset.count
             else:
@@ -86,6 +109,20 @@ def detect(opt):
             p = Path(p)  # to Path
             save_path = str(save_dir / p.name)  # img.jpg
             txt_path = str(save_dir / 'labels' / p.stem) + ('' if dataset.mode == 'image' else f'_{frame}')  # img.txt
+            if archive:
+                archive_save_path = str(save_dir / 'archive' / 'images' /p.name)
+
+                txt_path = str(save_dir / 'archive' / 'obj_train_data' / p.stem) + (
+                    '' if dataset.mode == 'image' else f'_{frame}')  # img.txt
+                archive_train_txt_path = str(save_dir / 'archive' / 'train.txt')
+
+                with open(txt_path + '.txt', 'w') as f:
+                    pass
+                with open(archive_train_txt_path, 'a') as ftt:
+                    train_txt = f'data/obj_train_data/{p.name}\n'
+                    ftt.write(train_txt)
+                shutil.copy(str(p), archive_save_path)  # copy image to archive folder
+
             s += '%gx%g ' % img.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if opt.save_crop else im0  # for opt.save_crop
@@ -112,8 +149,7 @@ def detect(opt):
                         plot_one_box(xyxy, im0, label=label, color=colors(c, True), line_thickness=opt.line_thickness)
                         if opt.save_crop:
                             save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
-
-            # Print time (inference + NMS)
+                            # Print time (inference + NMS)
             print(f'{s}Done. ({t2 - t1:.3f}s)')
 
             # Stream results
@@ -158,6 +194,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--view-img', action='store_true', help='display results')
     parser.add_argument('--save-txt', action='store_true', help='save results to *.txt')
+    parser.add_argument('--archive', action='store_true', help='store labels and imgs to CVAT YOLO format')
     parser.add_argument('--save-conf', action='store_true', help='save confidences in --save-txt labels')
     parser.add_argument('--save-crop', action='store_true', help='save cropped prediction boxes')
     parser.add_argument('--nosave', action='store_true', help='do not save images/videos')

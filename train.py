@@ -28,7 +28,7 @@ from utils.autoanchor import check_anchors
 from utils.datasets import create_dataloader
 from utils.general import labels_to_class_weights, increment_path, labels_to_image_weights, init_seeds, \
     fitness, strip_optimizer, get_latest_run, check_dataset, check_file, check_git_status, check_img_size, \
-    check_requirements, print_mutation, set_logging, one_cycle, colorstr
+    check_requirements, print_mutation, set_logging, one_cycle, colorstr, create_experiment_path
 from utils.google_utils import attempt_download
 from utils.loss import ComputeLoss
 from utils.plots import plot_images, plot_labels, plot_results, plot_evolution
@@ -41,21 +41,22 @@ logger = logging.getLogger(__name__)
 def train(hyp, opt, device, tb_writer=None):
     logger.info('')
     logger.info(colorstr('hyperparameters: ') + ', '.join(f'{k}={v}' for k, v in hyp.items()))
-    save_dir, epochs, batch_size, total_batch_size, weights, rank, task_name = \
-        Path(opt.save_dir), opt.epochs, opt.batch_size, opt.total_batch_size, opt.weights, opt.global_rank, opt.task
+    save_dir, epochs, batch_size, total_batch_size, weights, rank, task_name, timestamp = \
+        Path(opt.save_dir), opt.epochs, opt.batch_size, opt.total_batch_size, opt.weights, opt.global_rank, opt.task,\
+        opt.timestamp
 
     # Directories
     from datetime import datetime
-    dt =  datetime.now()
-    dt_str = dt.strftime('%d%b%y-%H%M%S')
+
+    dt_str = timestamp
 
     model_name = weights.split('.')[0]
     # cropping_yolov5l_29May21-035456_exp2
     full_model_name = f'{task_name}_{model_name}_{dt_str}'
     wdir = save_dir / 'weights'
     wdir.mkdir(parents=True, exist_ok=True)  # make dir
-    last = wdir/f'{full_model_name}_last.pt'
-    best = wdir/f'{full_model_name}_best.pt'
+    last = wdir / f'{full_model_name}_last.pt'
+    best = wdir / f'{full_model_name}_best.pt'
     results_file = save_dir / 'results.txt'
 
     # Save run settings
@@ -456,6 +457,14 @@ def train(hyp, opt, device, tb_writer=None):
     else:
         dist.destroy_process_group()
     torch.cuda.empty_cache()
+    ### archive and copy results to gdrive ###
+    source_dir = save_dir
+    import shutil
+    shutil.make_archive(source_dir, 'zip', source_dir)
+    from pydrive.auth import GoogleAuth
+    from pydrive.drive import GoogleDrive
+    gauth = GoogleAuth()
+    drive = GoogleDrive(gauth)
     return results
 
 
@@ -495,7 +504,9 @@ if __name__ == '__main__':
     parser.add_argument('--bbox_interval', type=int, default=-1, help='Set bounding-box image logging interval for W&B')
     parser.add_argument('--save_period', type=int, default=-1, help='Log model after every "save_period" epoch')
     parser.add_argument('--artifact_alias', type=str, default="latest", help='version of dataset artifact to be used')
-    parser.add_argument('--task',type=str,help='task name like cropping, price box extraction etc')
+    parser.add_argument('--task', type=str, help='task name like cropping, price box extraction etc')
+    parser.add_argument('--timestamp', type=str, help='current time and date')
+    parser.add_argument('--full_model_name', type=str, help='cropping_yolov5l_29May21_035456_exp2')
     opt = parser.parse_args()
 
     # Set DDP variables
@@ -523,11 +534,22 @@ if __name__ == '__main__':
         assert len(opt.cfg) or len(opt.weights), 'either --cfg or --weights must be specified'
         opt.img_size.extend([opt.img_size[-1]] * (2 - len(opt.img_size)))  # extend to 2 sizes (train, test)
         opt.name = 'evolve' if opt.evolve else opt.name
-        #todo save directory on google drive
+        # todo save directory on google drive
+
         if opt.task:
             # opt.save_dir = f'runs/{opt.task}/train'
             # opt.name = f'{opt.task}'
-            opt.save_dir = str(increment_path(Path(opt.project) / opt.task / opt.name, exist_ok=opt.exist_ok | opt.evolve))
+            dt_str, full_model_name, path = create_experiment_path(opt.project, opt.task, opt.weights)
+            if not opt.timestamp:
+                opt.timestamp = dt_str
+            if not opt.full_model_name:
+                opt.full_model_name = full_model_name
+            opt.save_dir = str(path
+                               # increment_path(Path(opt.project) / opt.task / opt.name, exist_ok=opt.exist_ok |
+                               # opt.evolve)
+
+                               )
+
         else:
             opt.save_dir = str(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok | opt.evolve))
 
